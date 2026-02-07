@@ -43,8 +43,5 @@ GameScripts/
 # Development scripts (machine-specific)
 scripts/
 
-# Reference files (not for git)
-reference/
-
 # Cursor files
 .cursor/

@@ -2,6 +2,8 @@
 
 A Project Zomboid mod that streamlines spear combat by automatically swapping broken spears and quick-loading spears from inventory to your back.
 
+**Repository:** [https://github.com/b-rutledge-code/spearbreaker](https://github.com/b-rutledge-code/spearbreaker)
+
 ## Overview
 
 Spears in Project Zomboid are powerful but fragile—they break often in combat. Players typically carry multiple spears, but manually opening the inventory to swap a broken one is clunky. Spearbreaker automates this:
@@ -17,12 +19,19 @@ Spears in Project Zomboid are powerful but fragile—they break often in combat.
 
 ## Installation
 
-1. Subscribe via Steam Workshop (when available), or
-2. Copy the `spearbreaker` folder to your Project Zomboid mods directory:
+1. **From GitHub** (clone or download):
+   ```bash
+   git clone https://github.com/b-rutledge-code/spearbreaker.git
+   ```
+   Then copy the `spearbreaker` folder into your Project Zomboid mods directory.
+2. **Steam Workshop** (when available): Subscribe to the mod.
+3. **Manual copy**: Download the repo and copy the `spearbreaker` folder to:
    ```
    ~/Zomboid/mods/spearbreaker/
    ```
-3. Enable the mod in the game's Mod Options menu.
+   (On Mac: `~/Library/Application Support/Zomboid/mods/spearbreaker/`)
+
+4. Enable the mod in the game's Mod Options menu.
 
 The mod auto-selects the correct version for your game build.
 
@@ -55,8 +64,11 @@ spearbreaker/
 │   └── spearbreaker.lua        # B41
 ├── 42.13/
 │   ├── mod.info                # B42.13+
-│   └── media/lua/client/
-│       └── spearbreaker.lua    # B42.13
+│   └── media/lua/
+│       ├── client/
+│       │   └── spearbreaker.lua
+│       └── shared/TimedActions/
+│           └── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
 ├── common/
 └── README.md
 ```
@@ -123,4 +135,4 @@ spearbreaker/
 
 ## License
 
-Open source. See repository for details.
+Open source. See [repository](https://github.com/b-rutledge-code/spearbreaker) for details.
