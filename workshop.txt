@@ -1,0 +1,26 @@
+version=1
+id=2796616455
+title=Spearbreaker
+description=[b]Spear pipeline for combat[/b]
+description=
+description=Streamlines spear combat by automatically swapping broken spears and quick-loading spears from inventory to your back. Spears break often and are heavy—this mod gives a spearfighter a smooth flow: inventory → back → hand.
+description=
+description=[h2]Features[/h2]
+description=- [b]Auto-swap on break[/b]: When your equipped spear breaks mid-combat, the mod drops it and equips the spear from your back slot
+description=- [b]Reload (R key)[/b]: Press R while holding a spear to attach another from inventory to your back—no inventory menu
+description=
+description=[h2]Usage[/h2]
+description=1. Equip a spear (both hands)
+description=2. Attach a spare spear to your back (right-click → Attach to Back, or drag to back slot)
+description=3. Fight—when your spear breaks, the mod auto-swaps
+description=4. Press R to reload a spear from inventory to your back (main inventory only; spears in bags require a transfer first)
+description=
+description=[h2]Requirements[/h2]
+description=- Build 41: 41.78.16–41.99
+description=- Build 42: 42.13+
+description=- Single player and multiplayer
+description=
+description=[h2]Repository[/h2]
+description=[url=https://github.com/b-rutledge-code/spearbreaker]github.com/b-rutledge-code/spearbreaker[/url]
+tags=Build 41;Build 42;Combat;Spear;Quality of Life
+visibility=public

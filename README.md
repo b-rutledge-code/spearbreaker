@@ -19,17 +19,18 @@ Spears in Project Zomboid are powerful but fragile—they break often in combat.
 
 ## Installation
 
-1. **From GitHub** (clone or download):
+1. **From GitHub**:
    ```bash
    git clone https://github.com/b-rutledge-code/spearbreaker.git
    ```
-   Then copy the `spearbreaker` folder into your Project Zomboid mods directory.
+   Copy the cloned `spearbreaker` folder into your Project Zomboid mods directory.
+
 2. **Steam Workshop** (when available): Subscribe to the mod.
-3. **Manual copy**: Download the repo and copy the `spearbreaker` folder to:
-   ```
-   ~/Zomboid/mods/spearbreaker/
-   ```
-   (On Mac: `~/Library/Application Support/Zomboid/mods/spearbreaker/`)
+
+3. **Mods directory** (per platform):
+   - **Windows**: `C:\Users\<user>\Zomboid\mods\spearbreaker\`
+   - **Mac**: `~/Library/Application Support/Zomboid/mods/spearbreaker/`
+   - **Linux**: `~/Zomboid/mods/spearbreaker/`
 
 4. Enable the mod in the game's Mod Options menu.
 
@@ -126,12 +127,20 @@ spearbreaker/
 
 ## Reference Docs
 
-- **`reference/zomboid/`** – General PZ modding knowledge (migration, API, spear mechanics)
+- **`reference/general/`** – General PZ modding knowledge (migration, API, spear mechanics)
 - **`reference/spearbreaker/`** – Mod-specific docs (agent brief, requirements, bugs)
 
 ## Code Notes
 
-- **Java→Lua conversion**: `findAllSpears` converts Java `ArrayList` to Lua table using 0-based indices (`spears_table[i]`). Lua's `ipairs()` iterates 1-based, so if the game returns userdata, the first spear (index 0) may be skipped. The mod may rely on the game returning a 1-based table in practice; if odd behavior occurs with spear detection, this is a likely cause.
+- **`getAllEvalRecurse` return type**: The game may return a Java `ArrayList` (userdata) or a Lua table. `findAllSpears` handles both: when userdata, it converts to a 1-based Lua table (`t[i+1] = spears:get(i)`) so `ipairs()` iterates correctly.
+
+## Contributing
+
+```bash
+git clone https://github.com/b-rutledge-code/spearbreaker.git
+cd spearbreaker
+# Copy 42.13/ or media/ to ~/Zomboid/mods/spearbreaker/ to test (exclude reference/)
+```
 
 ## License
 
