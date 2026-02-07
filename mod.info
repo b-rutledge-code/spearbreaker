@@ -1,0 +1,8 @@
+name=Spearbreaker
+id=SPEARBREAKER
+description=Swap broken spears without using your inventory menu
+modversion=41.78-1.0.0
+poster=poster.png
+url=http://theindiestone.com/
+versionMin=41.78.16
+versionMax=41.99
