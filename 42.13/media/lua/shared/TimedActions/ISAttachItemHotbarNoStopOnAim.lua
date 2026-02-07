@@ -15,11 +15,9 @@ function ISAttachItemHotbarNoStopOnAim:new(character, item, slot, slotIndex, slo
 end
 
 function ISAttachItemHotbarNoStopOnAim:start()
-    print("[Spearbreaker] ISAttachItemHotbarNoStopOnAim:start - animation should begin")
     ISAttachItemHotbar.start(self)
 end
 
 function ISAttachItemHotbarNoStopOnAim:perform()
-    print("[Spearbreaker] ISAttachItemHotbarNoStopOnAim:perform - attach complete")
     ISAttachItemHotbar.perform(self)
 end

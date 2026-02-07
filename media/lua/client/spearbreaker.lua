@@ -3,7 +3,7 @@ local function isSpear(item)
     return item and item:getCategory() == 'Weapon' and WeaponType.getWeaponType(item) == WeaponType.spear
 end
 
--- Function to find all spears in the player's inventory with enhanced debugging output
+-- Find all spears in the player's inventory
 local function findAllSpears(player)
     -- Fetch the player's inventory
     local inventory = player:getInventory()
@@ -13,19 +13,15 @@ local function findAllSpears(player)
         return isSpear(item)  -- Check if the item is a spear
     end)
 
-    -- if spears is a java object convert it to lua
-    local spears_table = {}
+    -- getAllEvalRecurse may return Java ArrayList (userdata) or Lua table
     if type(spears) == "userdata" then
+        local t = {}
         for i = 0, spears:size() - 1 do
-            spears_table[i] = spears:get(i)
+            t[i + 1] = spears:get(i)
         end
-        return spears_table
-    elseif type(spears) == "table" then
-        return spears
-    else
-        error("Unexpected Datatype") -- Print a message if spears are not userdata
+        return t
     end
-    return nil
+    return type(spears) == "table" and spears or {}
 end
 
 

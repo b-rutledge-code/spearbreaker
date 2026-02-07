@@ -6,10 +6,6 @@ require "TimedActions/ISAttachItemHotbarNoStopOnAim"
 require "TimedActions/ISEquipWeaponAction"
 require "Items/OnBreak"
 
--- Test: set SpearbreakerTestEmptyHands=true in debug console to attach with empty hands (unequip first).
--- Compare animation: does it play when hands empty vs occupied?
-SpearbreakerTestEmptyHands = SpearbreakerTestEmptyHands or false
-
 local pendingEquipFromBack = {}
 local pendingAttachFromInventory = {}
 
@@ -62,7 +58,6 @@ local function getAvailableSpear(player)
 
     for _, item in ipairs(other) do
         if not item:isBroken() then
-            print("[Spearbreaker] getAvailableSpear: spear in bag, queuing transfer")
             ISTimedActionQueue.add(ISInventoryTransferAction:new(player, item, item:getContainer(), player_inv, 1))
             return nil
         end
@@ -114,10 +109,8 @@ function OnBreak.HandleHandler(item, player, newItemString, breakItem)
                 local playerNum = player:getPlayerNum()
                 local hotbar = getPlayerHotbar(playerNum)
                 local back_slot_spear = getBackSlotSpear(player)
-                print("[Spearbreaker] spear break: hotbar=" .. tostring(hotbar) .. " back_slot_spear=" .. tostring(back_slot_spear))
                 if hotbar and back_slot_spear then
                     pendingEquipFromBack[playerNum] = getTimestamp() or 0
-                    print("[Spearbreaker] spear break: scheduling equip (t=" .. tostring(pendingEquipFromBack[playerNum]) .. ")")
                 end
             end
         else
@@ -134,12 +127,10 @@ local function pollEquipWhenReady(player)
     local when = pendingEquipFromBack[playerNum]
     if not when then return end
     local elapsed = (getTimestamp() or 0) - when
-    if elapsed < 1.5 then return end
+    if elapsed < 1.2 then return end
     pendingEquipFromBack[playerNum] = nil
-    print("[Spearbreaker] equip: elapsed=" .. string.format("%.2f", elapsed) .. "s")
     local hotbar = getPlayerHotbar(playerNum)
     local spear = getBackSlotSpear(player)
-    print("[Spearbreaker] pollEquipWhenReady: actionsEmpty, equipping hotbar=" .. tostring(hotbar) .. " spear=" .. tostring(spear))
     if hotbar and spear then
         hotbar:equipItem(spear)
     end
@@ -150,25 +141,24 @@ local lastReloadKeyMs = 0
 
 local function attachSpearToBackFromInventory()
     local player = getPlayer()
-    if not player then print("[Spearbreaker] attach: no player"); return false end
-
-    if player:isRunning() then print("[Spearbreaker] attach: bail player running"); return false end
+    if not player then return false end
+    if player:isRunning() then return false end
 
     local queue = ISTimedActionQueue.queues[player]
-    if queue and #queue.queue > 0 then print("[Spearbreaker] attach: bail queue not empty"); return false end
+    if queue and #queue.queue > 0 then return false end
 
     local equipped = player:getPrimaryHandItem()
-    if not isSpear(equipped) and not isBrokenSpearPiece(equipped) then print("[Spearbreaker] attach: bail no spear/broken in hand"); return false end
+    if not isSpear(equipped) and not isBrokenSpearPiece(equipped) then return false end
 
     local back_slot_spear = getBackSlotSpear(player)
-    if back_slot_spear and not back_slot_spear:isEquipped() then print("[Spearbreaker] attach: bail back slot full (spear not equipped)"); return false end
+    if back_slot_spear and not back_slot_spear:isEquipped() then return false end
 
     local new_spear = getAvailableSpear(player)
-    if not new_spear then print("[Spearbreaker] attach: bail no available spear"); return false end
+    if not new_spear then return false end
 
     local hotbar = getPlayerHotbar(player:getPlayerNum())
-    if not hotbar then print("[Spearbreaker] attach: bail no hotbar"); return false end
-    if not hotbar.availableSlot or not hotbar.availableSlot[1] then print("[Spearbreaker] attach: bail no back slot"); return false end
+    if not hotbar then return false end
+    if not hotbar.availableSlot or not hotbar.availableSlot[1] then return false end
 
     local slot = hotbar.availableSlot[1]
     local slotDef = slot.def
@@ -179,24 +169,6 @@ local function attachSpearToBackFromInventory()
         attachSlot = hotbar.replacements[new_spear:getAttachmentType()]
     end
     if attachSlot == "null" then return false end
-    -- Test: empty hands first to see if animation plays
-    if SpearbreakerTestEmptyHands then
-        print("[Spearbreaker] attach: TEST MODE (empty hands first) - queuing unequip+attach+reequip")
-        local toReequip = isSpear(equipped) and equipped or nil
-        ISTimedActionQueue.add(ISUnequipAction:new(player, equipped, 1))
-        hotbar:setAttachAnim(new_spear, slotDef)
-        ISInventoryPaneContextMenu.transferIfNeeded(player, new_spear)
-        if hotbar.attachedItems[1] then
-            ISTimedActionQueue.add(ISDetachItemHotbar:new(player, hotbar.attachedItems[1]))
-        end
-        ISTimedActionQueue.add(ISAttachItemHotbarNoStopOnAim:new(player, new_spear, attachSlot, 1, slotDef))
-        if toReequip then
-            ISTimedActionQueue.add(ISEquipWeaponAction:new(player, toReequip, 2, true, true))
-        end
-        return true
-    end
-    -- Normal: attach with hands occupied
-    print("[Spearbreaker] attach: normal mode (hands occupied) - queuing attach")
     hotbar:setAttachAnim(new_spear, slotDef)
     ISInventoryPaneContextMenu.transferIfNeeded(player, new_spear)
     if hotbar.attachedItems[1] then
@@ -212,9 +184,8 @@ local function pollAttachWhenReady(player)
     local when = pendingAttachFromInventory[playerNum]
     if not when then return end
     local elapsed = (getTimestampMs() or 0) - when
-    if elapsed < 400 then return end  -- 400ms settle
+    if elapsed < 200 then return end  -- 200ms settle
     pendingAttachFromInventory[playerNum] = nil  -- clear first so we don't retry on failure
-    print("[Spearbreaker] pollAttach: elapsed=" .. elapsed .. "ms calling attach")
     attachSpearToBackFromInventory()
 end
 
@@ -224,7 +195,6 @@ Events.OnPlayerUpdate.Add(pollAttachWhenReady)
 -- B42: spear breaks → LongStick_Broken in hand. Player auto-swings it and interrupts timed actions.
 -- Wait for the broken-piece swing to finish (next OnPlayerAttackFinished) before queuing.
 local function doSwap(player, in_hand, back_slot_spear, hotbar)
-    print("[Spearbreaker] doSwap: in_hand=" .. tostring(in_hand) .. " back_slot_spear=" .. tostring(back_slot_spear))
     if in_hand then
         local sq = player:getCurrentSquare()
         if sq then
@@ -233,11 +203,9 @@ local function doSwap(player, in_hand, back_slot_spear, hotbar)
             end
             local dropX, dropY, dropZ = ISTransferAction.GetDropItemOffset(player, sq, in_hand)
             ISTimedActionQueue.add(ISDropWorldItemAction:new(player, in_hand, sq, dropX, dropY, dropZ, 0, false))
-            print("[Spearbreaker] doSwap: queued drop")
         end
     end
     if back_slot_spear and hotbar then
-        print("[Spearbreaker] doSwap: equipping from back")
         hotbar:equipItem(back_slot_spear)
     end
 end
@@ -252,13 +220,11 @@ local function swapSpears(player, weapon)
 
     local back_slot_spear = getBackSlotSpear(player)
     local hotbar = getPlayerHotbar(player:getPlayerNum())
-    print("[Spearbreaker] swapSpears: scheduling doSwap on next OnPlayerAttackFinished in_hand=" .. tostring(in_hand) .. " back=" .. tostring(back_slot_spear))
 
     local handler
     handler = function(p, _)
         if p == player then
             Events.OnPlayerAttackFinished.Remove(handler)
-            print("[Spearbreaker] swapSpears: firing doSwap")
             doSwap(player, in_hand, back_slot_spear, hotbar)
         end
     end
@@ -270,15 +236,14 @@ local function reloadSpearFromInventory(keynum)
     if not getCore():isKey("ReloadWeapon", keynum) and not getCore():isKey("Hotbar 1", keynum) then return end
     local player = getPlayer()
     if not player then return end
-    if player:isDead() then print("[Spearbreaker] reload: bail dead"); return end
-    if UIManager.getSpeedControls() and UIManager.getSpeedControls():getCurrentGameSpeed() == 0 then print("[Spearbreaker] reload: bail paused"); return end
+    if player:isDead() then return end
+    if UIManager.getSpeedControls() and UIManager.getSpeedControls():getCurrentGameSpeed() == 0 then return end
 
     local now = getTimestampMs()
-    if now - lastReloadKeyMs < RELOAD_COOLDOWN_MS then print("[Spearbreaker] reload: bail cooldown"); return end
+    if now - lastReloadKeyMs < RELOAD_COOLDOWN_MS then return end
     lastReloadKeyMs = now
 
     pendingAttachFromInventory[player:getPlayerNum()] = getTimestampMs() or 0
-    print("[Spearbreaker] reload: scheduled attach")
 end
 
 Events.OnKeyStartPressed.Add(reloadSpearFromInventory)
