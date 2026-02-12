@@ -205,7 +205,7 @@ end
 
 -- Try attach when queue is empty. No fixed delay—retry until success or timeout.
 -- (We use ISAttachItemHotbarNoStopOnAim so the action isn't cancelled when they aim.)
-local PENDING_ATTACH_TIMEOUT_MS = 5000
+local PENDING_ATTACH_TIMEOUT_MS = 2000
 local function pollAttachWhenReady(player)
     local playerNum = player:getPlayerNum()
     local when = pendingAttachFromInventory[playerNum]
@@ -265,6 +265,19 @@ local function swapSpears(player, weapon)
 end
 Events.OnPlayerAttackFinished.Add(swapSpears)
 
+-- True when attach would succeed once queue is empty (back empty, spear in hand, spare spear in inv).
+local function canAttachSpearToBackFromInventory(player)
+    if not player or player:isRunning() then return false end
+    local equipped = player:getPrimaryHandItem()
+    if not isSpear(equipped) and not isBrokenSpearPiece(equipped) then return false end
+    local back_slot_spear = getBackSlotSpear(player)
+    if back_slot_spear and not back_slot_spear:isEquipped() then return false end -- back already has a spear
+    if not getAvailableSpear(player) then return false end
+    local hotbar = getPlayerHotbar(player:getPlayerNum())
+    if not hotbar or not hotbar.availableSlot or not hotbar.availableSlot[1] then return false end
+    return true
+end
+
 local function reloadSpearFromInventory(keynum)
     if not getCore():isKey("ReloadWeapon", keynum) and not getCore():isKey("Hotbar 1", keynum) then return end
     local player = getPlayer()
@@ -276,6 +289,8 @@ local function reloadSpearFromInventory(keynum)
     if now - lastReloadKeyMs < RELOAD_COOLDOWN_MS then return end
     lastReloadKeyMs = now
 
+    -- Only set pending when attach would actually run (back empty, spear in hand, spare in inv)
+    if not canAttachSpearToBackFromInventory(player) then return end
     pendingAttachFromInventory[player:getPlayerNum()] = getTimestampMs() or 0
 end
 
