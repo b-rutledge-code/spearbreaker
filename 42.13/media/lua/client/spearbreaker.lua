@@ -6,8 +6,10 @@ require "TimedActions/ISAttachItemHotbarNoStopOnAim"
 require "TimedActions/ISEquipWeaponAction"
 require "Items/OnBreak"
 
-local pendingEquipFromBack = {}
-local pendingAttachFromInventory = {}
+local pendingEquipFromBack = {}   -- [playerNum] = timestamp when break happened (for fallback timeout)
+local equipReadyFromAttackFinished = {}  -- set when OnPlayerAttackFinished fires so we equip next frame
+local equipOneShotHandlers = {}   -- [playerNum] = one-shot handler (so we can remove it on fallback)
+local pendingAttachFromInventory = {}  -- [playerNum] = timestamp when R pressed (try until success or timeout)
 
 local function isSpear(item)
     if not item or item:getCategory() ~= 'Weapon' then return false end
@@ -105,14 +107,25 @@ function OnBreak.HandleHandler(item, player, newItemString, breakItem)
             end
             item:Remove()
             triggerEvent("OnContainerUpdate")
-            if player and cont == player:getInventory() and not isServer() then
-                local playerNum = player:getPlayerNum()
-                local hotbar = getPlayerHotbar(playerNum)
-                local back_slot_spear = getBackSlotSpear(player)
-                if hotbar and back_slot_spear then
-                    pendingEquipFromBack[playerNum] = getTimestamp() or 0
+                if player and cont == player:getInventory() and not isServer() then
+                    local playerNum = player:getPlayerNum()
+                    local hotbar = getPlayerHotbar(playerNum)
+                    local back_slot_spear = getBackSlotSpear(player)
+                    if hotbar and back_slot_spear then
+                        pendingEquipFromBack[playerNum] = getTimestamp() or 0
+                        -- Equip as soon as this swing ends (OnPlayerAttackFinished), not after a fixed delay
+                        local oneShot
+                        oneShot = function(p, _)
+                            if p == player then
+                                Events.OnPlayerAttackFinished.Remove(oneShot)
+                                equipOneShotHandlers[playerNum] = nil
+                                equipReadyFromAttackFinished[playerNum] = true
+                            end
+                        end
+                        equipOneShotHandlers[playerNum] = oneShot
+                        Events.OnPlayerAttackFinished.Add(oneShot)
+                    end
                 end
-            end
         else
             item:Remove()
             triggerEvent("OnContainerUpdate")
@@ -126,9 +139,21 @@ local function pollEquipWhenReady(player)
     local playerNum = player:getPlayerNum()
     local when = pendingEquipFromBack[playerNum]
     if not when then return end
-    local elapsed = (getTimestamp() or 0) - when
-    if elapsed < 1.2 then return end
+    local now = getTimestamp() or 0
+    local elapsed = now - when
+    -- Prefer: equip on first update after attack finished (no magic delay)
+    local ready = equipReadyFromAttackFinished[playerNum]
+    -- Fallback: if OnPlayerAttackFinished never fired (e.g. death), equip after 2s
+    if not ready and elapsed < 2.0 then return end
+    -- Remove one-shot if we're taking the fallback path (event never fired)
+    local oneShot = equipOneShotHandlers[playerNum]
+    if oneShot then
+        Events.OnPlayerAttackFinished.Remove(oneShot)
+        equipOneShotHandlers[playerNum] = nil
+    end
     pendingEquipFromBack[playerNum] = nil
+    equipReadyFromAttackFinished[playerNum] = nil
+    if player:isDead() then return end
     local hotbar = getPlayerHotbar(playerNum)
     local spear = getBackSlotSpear(player)
     if hotbar and spear then
@@ -178,15 +203,23 @@ local function attachSpearToBackFromInventory()
     return true
 end
 
--- Defer attach so combat/aiming doesn't interrupt the timed action.
+-- Try attach when queue is empty. No fixed delay—retry until success or timeout.
+-- (We use ISAttachItemHotbarNoStopOnAim so the action isn't cancelled when they aim.)
+local PENDING_ATTACH_TIMEOUT_MS = 5000
 local function pollAttachWhenReady(player)
     local playerNum = player:getPlayerNum()
     local when = pendingAttachFromInventory[playerNum]
     if not when then return end
     local elapsed = (getTimestampMs() or 0) - when
-    if elapsed < 200 then return end  -- 200ms settle
-    pendingAttachFromInventory[playerNum] = nil  -- clear first so we don't retry on failure
-    attachSpearToBackFromInventory()
+    if elapsed > PENDING_ATTACH_TIMEOUT_MS then
+        pendingAttachFromInventory[playerNum] = nil
+        return
+    end
+    local queue = ISTimedActionQueue.queues[player]
+    if queue and #queue.queue > 0 then return end
+    if attachSpearToBackFromInventory() then
+        pendingAttachFromInventory[playerNum] = nil
+    end
 end
 
 Events.OnPlayerUpdate.Add(pollEquipWhenReady)
