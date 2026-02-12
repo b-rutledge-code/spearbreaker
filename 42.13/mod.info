@@ -3,5 +3,6 @@ id=SPEARBREAKER
 description=Swap broken spears without using your inventory menu
 modversion=42.13-1.0.0
 poster=poster.png
+icon=poster.png
 url=http://theindiestone.com/
 versionMin=42.13
