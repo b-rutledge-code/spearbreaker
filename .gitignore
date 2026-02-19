@@ -42,6 +42,11 @@ GameScripts/
 
 # Development scripts (machine-specific)
 scripts/
+# B42 trait script (part of mod, not dev tooling)
+!42.13/media/scripts/spearbreaker/traits.txt
 
 # Cursor files
 .cursor/
+
+# Mod docs (agent-brief, requirements, bugs)
+docs/
