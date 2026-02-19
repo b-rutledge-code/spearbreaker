@@ -56,7 +56,7 @@ The mod auto-selects the correct version for your game build.
 
 ### Spearbreaker trait (optional)
 
-With the **Spearbreaker** trait you get Spear level 1 and the Bind Spear / Wire Spear recipes from the start. You also get **spear sweep**: when you aim at the floor and hit a **standing** zombie with a spear, there is a chance to trip them (knockdown). The chance scales with your Spear level (higher level = more likely). Stabbing crawlers or zombies already on the ground is unchanged—only standing targets can be tripped.
+With the **Spearbreaker** trait you get +1 Spear and **shorter delay between spear attacks**: melee cooldown drains faster when using a spear, so you can attack again sooner.
 
 ## Technical Details
 
@@ -69,11 +69,16 @@ spearbreaker/
 │   └── spearbreaker.lua        # B41
 ├── 42.13/
 │   ├── mod.info                # B42.13+
-│   └── media/lua/
-│       ├── client/
-│       │   └── spearbreaker.lua
-│       └── shared/TimedActions/
-│           └── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
+│   └── media/
+│       ├── lua/
+│       │   ├── client/
+│       │   │   └── spearbreaker.lua
+│       │   ├── shared/TimedActions/
+│       │   │   └── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
+│       │   └── shared/Translate/EN/
+│       │       └── UI_EN.txt   # Trait description
+│       └── scripts/spearbreaker/
+│           └── traits.txt     # Spearbreaker trait (+1 Spear, faster delay)
 ├── common/
 └── README.md
 ```
@@ -84,7 +89,7 @@ spearbreaker/
 |-------|---------|---------|
 | **B41** `OnPlayerAttackFinished` | `swapSpears` | After an attack with no weapon (spear broke), drop broken spear and equip back-slot spear |
 | **B42** `OnBreak.HandleHandler` | Wrapper | When spear breaks, drop `LongStick_Broken` to ground (never put in hand). Schedule delayed equip from back. |
-| **B42** `OnPlayerUpdate` | Poll | After 1.5 seconds post-break, equip spear from back slot (knockback must finish first) |
+| **B42** `OnPlayerUpdate` | Poll | After 1.5 seconds post-break, equip spear from back slot (knockback must finish first); Spearbreaker trait: drain melee delay faster when holding spear |
 | `OnKeyPressed` | `reloadSpearFromInventory` | When R pressed, attach available spear from inventory to back slot |
 
 **B42 note**: The combat system runs a “broken swing” when the broken piece is in hand; equipping immediately fails because knockback interrupts timed actions. The mod drops the broken piece to the ground and waits 1.5 seconds before equipping from the back.
@@ -120,7 +125,7 @@ spearbreaker/
 | Name | Spearbreaker |
 | ID | SPEARBREAKER |
 | B41 Version | 41.78-1.0.0 (41.78.16–41.99) |
-| B42 Version | 42.13-1.0.0 (42.13+) |
+| B42 Version | 42.13-1.1.0 (42.13+) |
 | Client-only | Yes (no server Lua) |
 
 ## Known Limitations
@@ -131,8 +136,7 @@ spearbreaker/
 
 ## Reference Docs
 
-- **`reference/general/`** – General PZ modding knowledge (migration, API, spear mechanics)
-- **`reference/spearbreaker/`** – Mod-specific docs (agent brief, requirements, bugs)
+- **`reference/general/`** – General PZ modding knowledge (migration, API, spear mechanics, trait lookup). Mod-specific behaviour is documented in this README.
 
 ## Code Notes
 
