@@ -3,7 +3,6 @@ require "TimedActions/ISUnequipAction"
 require "TimedActions/ISDropWorldItemAction"
 require "TimedActions/ISDetachItemHotbar"
 require "TimedActions/ISAttachItemHotbarNoStopOnAim"
-require "TimedActions/ISEquipWeaponAction"
 require "Items/OnBreak"
 
 local pendingEquipFromBack = {}   -- [playerNum] = timestamp when break happened (for fallback timeout)
