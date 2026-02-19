@@ -54,6 +54,10 @@ The mod auto-selects the correct version for your game build.
 
 **Note**: The reload only works with spears in your **main inventory** (not inside bags/containers). If all spears are in bags, the mod will queue a transfer for one—you may need to press R again after the transfer completes.
 
+### Spearbreaker trait (optional)
+
+With the **Spearbreaker** trait you get Spear level 1 and the Bind Spear / Wire Spear recipes from the start. You also get **spear sweep**: when you aim at the floor and hit a **standing** zombie with a spear, there is a chance to trip them (knockdown). The chance scales with your Spear level (higher level = more likely). Stabbing crawlers or zombies already on the ground is unchanged—only standing targets can be tripped.
+
 ## Technical Details
 
 ### Mod Structure

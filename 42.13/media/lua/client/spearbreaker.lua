@@ -295,3 +295,36 @@ end
 
 Events.OnKeyStartPressed.Add(reloadSpearFromInventory)
 Events.OnKeyPressed.Add(reloadSpearFromInventory)
+
+-- Spear sweep (trait): aim at floor + standing zombie + spear → chance to trip (knockdown), scales with Spear level
+local SPEAR_SWEEP_BASE_CHANCE = 15
+local SPEAR_SWEEP_PER_LEVEL = 6
+local SPEAR_SWEEP_CAP = 90
+
+local spearbreakerTrait = nil
+local function getSpearbreakerTrait()
+    if spearbreakerTrait then return spearbreakerTrait end
+    local traits = IsoWorld.instance and IsoWorld.instance.getLuaTraits and IsoWorld.instance:getLuaTraits()
+    if not traits then return nil end
+    for i = 0, traits:size() - 1 do
+        local t = traits:get(i)
+        if t and tostring(t) == "spearbreaker:spearbreaker" then
+            spearbreakerTrait = t
+            return spearbreakerTrait
+        end
+    end
+    return nil
+end
+
+Events.OnWeaponHitCharacter.Add(function(wielder, target, weapon, damage)
+    if not wielder or wielder ~= getPlayer() or wielder:isDead() then return end
+    if not target or not target:isZombie() or not target:isStanding() then return end
+    if not weapon or not isSpear(weapon) then return end
+    if not wielder:isAimAtFloor() then return end
+    local trait = getSpearbreakerTrait()
+    if not trait or not wielder:hasTrait(trait) then return end
+    local chance = math.min(SPEAR_SWEEP_CAP, SPEAR_SWEEP_BASE_CHANCE + wielder:getPerkLevel(PerkFactory.Perks.Spear) * SPEAR_SWEEP_PER_LEVEL)
+    if ZombRand(100) < chance then
+        wielder:setCriticalHit(true)
+    end
+end)
