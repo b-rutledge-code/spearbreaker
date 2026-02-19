@@ -1,4 +1,4 @@
 UI_EN = {
     UI_trait_Spearbreaker = "Spearbreaker",
-    UI_trait_SpearbreakerDesc = "Start with Spear level 1. You know how to bind and wire spears.",
+    UI_trait_SpearbreakerDesc = "Shorter delay between spear attacks.",
 }

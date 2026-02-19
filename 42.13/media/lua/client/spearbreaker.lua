@@ -296,35 +296,23 @@ end
 Events.OnKeyStartPressed.Add(reloadSpearFromInventory)
 Events.OnKeyPressed.Add(reloadSpearFromInventory)
 
--- Spear sweep (trait): aim at floor + standing zombie + spear → chance to trip (knockdown), scales with Spear level
-local SPEAR_SWEEP_BASE_CHANCE = 15
-local SPEAR_SWEEP_PER_LEVEL = 6
-local SPEAR_SWEEP_CAP = 90
-
-local spearbreakerTrait = nil
-local function getSpearbreakerTrait()
-    if spearbreakerTrait then return spearbreakerTrait end
-    local traits = IsoWorld.instance and IsoWorld.instance.getLuaTraits and IsoWorld.instance:getLuaTraits()
-    if not traits then return nil end
-    for i = 0, traits:size() - 1 do
-        local t = traits:get(i)
-        if t and tostring(t) == "spearbreaker:spearbreaker" then
-            spearbreakerTrait = t
-            return spearbreakerTrait
-        end
-    end
-    return nil
-end
-
-Events.OnWeaponHitCharacter.Add(function(wielder, target, weapon, damage)
-    if not wielder or wielder ~= getPlayer() or wielder:isDead() then return end
-    if not target or not target:isZombie() or not target:isStanding() then return end
+-- Faster spear swing (Spearbreaker trait only): drain melee delay faster so next attack can start sooner (vanilla drains 0.625/frame).
+-- Bigger impact early (low Spear), tapers off as Spear level increases.
+local SPEAR_MELEE_DRAIN_BASE = 0.35    -- extra drain at Spear 0 (noticeable but not spammy)
+local SPEAR_MELEE_DRAIN_PER_LEVEL = -0.025  -- subtract per level (less benefit over time)
+local SPEAR_MELEE_DRAIN_MIN = 0.12     -- floor so high level still gets a small boost
+-- Vanilla API (installed game Lua): CharacterTrait.get(ResourceLocation.of(id))
+local SPEARBREAKER_TRAIT = CharacterTrait.get(ResourceLocation.of("spearbreaker:spearbreaker"))
+local function drainSpearMeleeDelayFaster(player)
+    if not player or player ~= getPlayer() or player:isDead() then return end
+    if not SPEARBREAKER_TRAIT or not player:hasTrait(SPEARBREAKER_TRAIT) then return end
+    local weapon = player:getPrimaryHandItem()
     if not weapon or not isSpear(weapon) then return end
-    if not wielder:isAimAtFloor() then return end
-    local trait = getSpearbreakerTrait()
-    if not trait or not wielder:hasTrait(trait) then return end
-    local chance = math.min(SPEAR_SWEEP_CAP, SPEAR_SWEEP_BASE_CHANCE + wielder:getPerkLevel(PerkFactory.Perks.Spear) * SPEAR_SWEEP_PER_LEVEL)
-    if ZombRand(100) < chance then
-        wielder:setCriticalHit(true)
-    end
-end)
+    local delay = player:getMeleeDelay()
+    if delay <= 0 then return end
+    local level = player:getPerkLevel(PerkFactory.Perks.Spear) or 0
+    local bonus = math.max(SPEAR_MELEE_DRAIN_MIN, SPEAR_MELEE_DRAIN_BASE + level * SPEAR_MELEE_DRAIN_PER_LEVEL)
+    local mult = getGameTime() and getGameTime():getMultiplier() or 1.0
+    player:setMeleeDelay(math.max(0, delay - bonus * mult))
+end
+Events.OnPlayerUpdate.Add(drainSpearMeleeDelayFaster)

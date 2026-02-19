@@ -9,6 +9,5 @@ module Spearbreaker
         UIName = UI_trait_Spearbreaker,
         UIDescription = UI_trait_SpearbreakerDesc,
         XPBoosts = Spear=1,
-        GrantedRecipes = BindSpear;WireSpear,
     }
 }
