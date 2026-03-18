@@ -5,9 +5,10 @@ module Spearbreaker
         IsProfessionTrait = false,
         DisabledInMultiplayer = false,
         CharacterTrait = spearbreaker:spearbreaker,
-        Cost = 4,
+        Cost = 6,
         UIName = UI_trait_Spearbreaker,
         UIDescription = UI_trait_SpearbreakerDesc,
-        XPBoosts = Spear=1,
+        XPBoosts = Spear=2;Carving=1,
+        GrantedRecipes = FireHardenSpear,
     }
 }

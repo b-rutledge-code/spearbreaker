@@ -54,9 +54,9 @@ The mod auto-selects the correct version for your game build.
 
 **Note**: The reload only works with spears in your **main inventory** (not inside bags/containers). If all spears are in bags, the mod will queue a transfer for one—you may need to press R again after the transfer completes.
 
-### Spearbreaker trait (optional)
+### Spearbreaker trait (optional, 6 points)
 
-With the **Spearbreaker** trait you get +1 Spear and **shorter delay between spear attacks**: melee cooldown drains faster when using a spear, so you can attack again sooner.
+With the **Spearbreaker** trait you get **+2 Spear XP**, **+1 Carving XP**, the **Fire Harden Spear** recipe from character creation, and **shorter delay between spear attacks** (melee cooldown drains faster when using a spear).
 
 ## Technical Details
 
@@ -76,9 +76,9 @@ spearbreaker/
 │       │   ├── shared/TimedActions/
 │       │   │   └── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
 │       │   └── shared/Translate/EN/
-│       │       └── UI_EN.txt   # Trait description
+│       │       └── UI.json   # Trait description
 │       └── scripts/spearbreaker/
-│           └── traits.txt     # Spearbreaker trait (+1 Spear, faster delay)
+│           └── traits.txt     # Spearbreaker trait (6 pts: Spear+2, Carving+1, FireHardenSpear)
 ├── common/
 └── README.md
 ```
@@ -125,7 +125,7 @@ spearbreaker/
 | Name | Spearbreaker |
 | ID | SPEARBREAKER |
 | B41 Version | 41.78-1.0.0 (41.78.16–41.99) |
-| B42 Version | 1.1.0 (42.13+) |
+| B42 Version | 1.2.0 (42.13+) |
 | Client-only | Yes (no server Lua) |
 
 ## Known Limitations

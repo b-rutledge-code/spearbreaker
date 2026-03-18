@@ -1,4 +1,0 @@
-UI_EN = {
-    UI_trait_Spearbreaker = "Spearbreaker",
-    UI_trait_SpearbreakerDesc = "Shorter delay between spear attacks.",
-}
