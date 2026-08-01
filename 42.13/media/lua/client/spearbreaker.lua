@@ -3,12 +3,16 @@ require "TimedActions/ISUnequipAction"
 require "TimedActions/ISDropWorldItemAction"
 require "TimedActions/ISDetachItemHotbar"
 require "TimedActions/ISAttachItemHotbarNoStopOnAim"
+require "TimedActions/ISEquipWeaponAction"
 require "Items/OnBreak"
 
 local pendingEquipFromBack = {}   -- [playerNum] = timestamp when break happened (for fallback timeout)
 local equipReadyFromAttackFinished = {}  -- set when OnPlayerAttackFinished fires so we equip next frame
 local equipOneShotHandlers = {}   -- [playerNum] = one-shot handler (so we can remove it on fallback)
 local pendingAttachFromInventory = {}  -- [playerNum] = timestamp when R pressed (try until success or timeout)
+-- After a spear break: empty hands + R equips a spare to hands for a short window.
+local reloadGraceUntilMs = {}  -- [playerNum] = getTimestampMs() deadline
+local RELOAD_GRACE_AFTER_BREAK_MS = 5000
 
 local function isSpear(item)
     if not item or item:getCategory() ~= 'Weapon' then return false end
@@ -36,6 +40,8 @@ local function findAllSpears(player)
     return type(spears) == "table" and spears or {}
 end
 
+-- Prefer main-inventory spare; else return a bag spare (no transfer here).
+-- Attach path uses transferIfNeeded so one R incurs bag-transfer time, then attaches — no second press.
 local function getAvailableSpear(player)
     local spears = findAllSpears(player)
     if not spears or #spears == 0 then return nil end
@@ -51,17 +57,15 @@ local function getAvailableSpear(player)
         end
     end
 
-    for _, item in ipairs(main) do
-        if isSpear(item) and item:getAttachedSlot() ~= 1 and not item:isEquipped() and not item:isBroken() then
-            return item
-        end
+    local function usableSpare(item)
+        return isSpear(item) and item:getAttachedSlot() ~= 1 and not item:isEquipped() and not item:isBroken()
     end
 
+    for _, item in ipairs(main) do
+        if usableSpare(item) then return item end
+    end
     for _, item in ipairs(other) do
-        if not item:isBroken() then
-            ISTimedActionQueue.add(ISInventoryTransferAction:new(player, item, item:getContainer(), player_inv, 1))
-            return nil
-        end
+        if usableSpare(item) then return item end
     end
     return nil
 end
@@ -108,6 +112,7 @@ function OnBreak.HandleHandler(item, player, newItemString, breakItem)
             triggerEvent("OnContainerUpdate")
                 if player and cont == player:getInventory() and not isServer() then
                     local playerNum = player:getPlayerNum()
+                    reloadGraceUntilMs[playerNum] = (getTimestampMs() or 0) + RELOAD_GRACE_AFTER_BREAK_MS
                     local hotbar = getPlayerHotbar(playerNum)
                     local back_slot_spear = getBackSlotSpear(player)
                     if hotbar and back_slot_spear then
@@ -132,6 +137,31 @@ function OnBreak.HandleHandler(item, player, newItemString, breakItem)
     else
         originalHandleHandler(item, player, newItemString, breakItem)
     end
+end
+
+-- Spear / broken piece in hand → stage to back. Empty hands during post-break grace → equip to hands.
+-- Equipping anything else clears the grace window.
+local function isPostBreakEmptyHandGrace(player)
+    local equipped = player:getPrimaryHandItem()
+    local playerNum = player:getPlayerNum()
+    local untilMs = reloadGraceUntilMs[playerNum]
+    if not untilMs then return false end
+    local now = getTimestampMs() or 0
+    if now > untilMs then
+        reloadGraceUntilMs[playerNum] = nil
+        return false
+    end
+    if equipped then
+        if isSpear(equipped) or isBrokenSpearPiece(equipped) then return false end
+        reloadGraceUntilMs[playerNum] = nil
+        return false
+    end
+    return true
+end
+
+local function handsHoldingSpearOrBroken(player)
+    local equipped = player:getPrimaryHandItem()
+    return isSpear(equipped) or isBrokenSpearPiece(equipped)
 end
 
 local function pollEquipWhenReady(player)
@@ -163,6 +193,7 @@ end
 local RELOAD_COOLDOWN_MS = 300
 local lastReloadKeyMs = 0
 
+-- Spear in hand: stage spare onto back (pipeline).
 local function attachSpearToBackFromInventory()
     local player = getPlayer()
     if not player then return false end
@@ -171,8 +202,7 @@ local function attachSpearToBackFromInventory()
     local queue = ISTimedActionQueue.queues[player]
     if queue and #queue.queue > 0 then return false end
 
-    local equipped = player:getPrimaryHandItem()
-    if not isSpear(equipped) and not isBrokenSpearPiece(equipped) then return false end
+    if not handsHoldingSpearOrBroken(player) then return false end
 
     local back_slot_spear = getBackSlotSpear(player)
     if back_slot_spear and not back_slot_spear:isEquipped() then return false end
@@ -199,12 +229,56 @@ local function attachSpearToBackFromInventory()
         ISTimedActionQueue.add(ISDetachItemHotbar:new(player, hotbar.attachedItems[1]))
     end
     ISTimedActionQueue.add(ISAttachItemHotbarNoStopOnAim:new(player, new_spear, attachSlot, 1, slotDef))
+    reloadGraceUntilMs[player:getPlayerNum()] = nil
     return true
 end
 
--- Try attach when queue is empty. No fixed delay—retry until success or timeout.
--- (We use ISAttachItemHotbarNoStopOnAim so the action isn't cancelled when they aim.)
-local PENDING_ATTACH_TIMEOUT_MS = 2000
+-- Empty hands after break: equip spare to hands (transfer time still applies; slower than back→hand).
+local function equipSpearToHandsFromInventory()
+    local player = getPlayer()
+    if not player then return false end
+    if player:isRunning() then return false end
+
+    local queue = ISTimedActionQueue.queues[player]
+    if queue and #queue.queue > 0 then return false end
+
+    if not isPostBreakEmptyHandGrace(player) then return false end
+
+    local new_spear = getAvailableSpear(player)
+    if not new_spear then return false end
+
+    -- Vanilla equipWeapon path: transfer into main inv if needed, then two-handed equip.
+    ISInventoryPaneContextMenu.transferIfNeeded(player, new_spear)
+    ISTimedActionQueue.add(ISEquipWeaponAction:new(player, new_spear, 50, true, true))
+    reloadGraceUntilMs[player:getPlayerNum()] = nil
+    return true
+end
+
+local function canAttachSpearToBackFromInventory(player)
+    if not player or player:isRunning() then return false end
+    if not handsHoldingSpearOrBroken(player) then return false end
+    local back_slot_spear = getBackSlotSpear(player)
+    if back_slot_spear and not back_slot_spear:isEquipped() then return false end
+    if not getAvailableSpear(player) then return false end
+    local hotbar = getPlayerHotbar(player:getPlayerNum())
+    if not hotbar or not hotbar.availableSlot or not hotbar.availableSlot[1] then return false end
+    return true
+end
+
+local function canEquipSpearToHandsFromInventory(player)
+    if not player or player:isRunning() then return false end
+    if not isPostBreakEmptyHandGrace(player) then return false end
+    if not getAvailableSpear(player) then return false end
+    return true
+end
+
+local function canReloadSpear(player)
+    return canAttachSpearToBackFromInventory(player) or canEquipSpearToHandsFromInventory(player)
+end
+
+-- Try reload action when queue is empty. No fixed delay—retry until success or timeout.
+-- Long enough for bag→main transfer timed action + attach/equip anim (one R queues both).
+local PENDING_ATTACH_TIMEOUT_MS = 8000
 local function pollAttachWhenReady(player)
     local playerNum = player:getPlayerNum()
     local when = pendingAttachFromInventory[playerNum]
@@ -216,7 +290,13 @@ local function pollAttachWhenReady(player)
     end
     local queue = ISTimedActionQueue.queues[player]
     if queue and #queue.queue > 0 then return end
-    if attachSpearToBackFromInventory() then
+    local ok = false
+    if isPostBreakEmptyHandGrace(player) then
+        ok = equipSpearToHandsFromInventory()
+    else
+        ok = attachSpearToBackFromInventory()
+    end
+    if ok then
         pendingAttachFromInventory[playerNum] = nil
     end
 end
@@ -264,19 +344,6 @@ local function swapSpears(player, weapon)
 end
 Events.OnPlayerAttackFinished.Add(swapSpears)
 
--- True when attach would succeed once queue is empty (back empty, spear in hand, spare spear in inv).
-local function canAttachSpearToBackFromInventory(player)
-    if not player or player:isRunning() then return false end
-    local equipped = player:getPrimaryHandItem()
-    if not isSpear(equipped) and not isBrokenSpearPiece(equipped) then return false end
-    local back_slot_spear = getBackSlotSpear(player)
-    if back_slot_spear and not back_slot_spear:isEquipped() then return false end -- back already has a spear
-    if not getAvailableSpear(player) then return false end
-    local hotbar = getPlayerHotbar(player:getPlayerNum())
-    if not hotbar or not hotbar.availableSlot or not hotbar.availableSlot[1] then return false end
-    return true
-end
-
 local function reloadSpearFromInventory(keynum)
     if not getCore():isKey("ReloadWeapon", keynum) and not getCore():isKey("Hotbar 1", keynum) then return end
     local player = getPlayer()
@@ -288,8 +355,7 @@ local function reloadSpearFromInventory(keynum)
     if now - lastReloadKeyMs < RELOAD_COOLDOWN_MS then return end
     lastReloadKeyMs = now
 
-    -- Only set pending when attach would actually run (back empty, spear in hand, spare in inv)
-    if not canAttachSpearToBackFromInventory(player) then return end
+    if not canReloadSpear(player) then return end
     pendingAttachFromInventory[player:getPlayerNum()] = getTimestampMs() or 0
 end
 

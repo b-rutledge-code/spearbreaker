@@ -50,9 +50,9 @@ The mod auto-selects the correct version for your game build.
 
 1. Hold a spear in both hands.
 2. Press **R** (key code 19).
-3. If you have another spear in your main inventory (not in a bag) and your back slot is empty, the mod attaches it to your back.
+3. If you have another spare spear (main inventory or a bag) and your back slot is empty, the mod attaches it to your back.
 
-**Note**: The reload only works with spears in your **main inventory** (not inside bags/containers). If all spears are in bags, the mod will queue a transfer for one—you may need to press R again after the transfer completes.
+**Note**: Spears in bags still take transfer time (vanilla timed action) before attaching. If your spear **breaks** and your **back is empty**, press **R** right away to equip a spare from inventory into your hands (short window after the break; slower than back→hand auto-swap). Equipping anything else ends that window.
 
 ### Spearbreaker trait (optional, 6 points)
 
@@ -100,7 +100,7 @@ spearbreaker/
 |----------|-------------|
 | `isSpear(item)` | Returns true if item is a weapon with `WeaponType.spear` |
 | `findAllSpears(player)` | Returns all spears in player inventory (recursive; handles bags) |
-| `getAvailableSpear(player)` | Returns first unbroken, unequipped spear not in back slot from main inventory. If only in bags, queues transfer. |
+| `getAvailableSpear(player)` | First unbroken, unequipped spare not on back; prefers main inventory, else bag (no transfer side effect) |
 | `getBackSlotSpear(player)` | Returns spear attached to slot 1 (Shovel Back) |
 | `getBrokenSpear(player)` | Returns first broken spear in inventory |
 | `swapSpears(player, weapon)` | Drops broken spear, equips back-slot spear |
@@ -125,12 +125,12 @@ spearbreaker/
 | Name | Spearbreaker |
 | ID | SPEARBREAKER |
 | B41 Version | 41.78-1.0.0 (41.78.16–41.99) |
-| B42 Version | 1.2.0 (42.13+) |
+| B42 Version | 1.3.0 (42.13+) |
 | Client-only | Yes (no server Lua) |
 
 ## Known Limitations
 
-- Reload (R) prefers spears in main inventory; spears in bags require a transfer first.
+- Reload (R): bag spares use `transferIfNeeded` then attach (transfer time still applies). Post-break empty hands: R equips to hands for 5 s.
 - Single Lua file; no configurable keybind (R hardcoded).
 - No poster.png included (mod.info references it; optional).
 
