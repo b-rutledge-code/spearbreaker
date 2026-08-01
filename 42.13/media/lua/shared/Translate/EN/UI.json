@@ -1,4 +1,5 @@
 {
     "UI_trait_Spearbreaker": "Spearbreaker",
-    "UI_trait_SpearbreakerDesc": "Knows how to fire-harden spears. +2 Spear XP, +1 Carving XP. Shorter delay between spear attacks."
+    "UI_trait_SpearbreakerDesc": "Knows how to fire-harden spears. +2 Spear XP, +1 Carving XP. Shorter delay between spear attacks.",
+    "UI_Spearbreaker_StakedSpear": "Stake Spear"
 }

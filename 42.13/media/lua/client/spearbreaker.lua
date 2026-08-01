@@ -4,6 +4,8 @@ require "TimedActions/ISDropWorldItemAction"
 require "TimedActions/ISDetachItemHotbar"
 require "TimedActions/ISAttachItemHotbarNoStopOnAim"
 require "TimedActions/ISEquipWeaponAction"
+require "TimedActions/ISInventoryTransferAction"
+require "TimedActions/ISStakedSpearAction"
 require "Items/OnBreak"
 
 local pendingEquipFromBack = {}   -- [playerNum] = timestamp when break happened (for fallback timeout)
@@ -382,3 +384,192 @@ local function drainSpearMeleeDelayFaster(player)
     player:setMeleeDelay(math.max(0, delay - bonus * mult))
 end
 Events.OnPlayerUpdate.Add(drainSpearMeleeDelayFaster)
+
+-- --- Staked spears (Phase 1 SP) -------------------------------------------------
+
+local function getLocalOwnerId(player)
+	if not player then return nil end
+	if player.getSteamID then
+		local sid = player:getSteamID()
+		if sid and tostring(sid) ~= "0" then
+			return tostring(sid)
+		end
+	end
+	return player:getUsername() or ("local" .. tostring(player:getPlayerNum()))
+end
+
+local function isSoftStakeGround(square)
+	if not square then return false end
+	local groundType = ISShovelGroundCursor.GetDirtGravelSand(square)
+	return groundType == "dirt" or groundType == "sand" or groundType == "clay"
+end
+
+-- Primary-hand spear first; else first inv/bag spare (not back-attached).
+local function getSpearToStake(player)
+	local primary = player:getPrimaryHandItem()
+	if isSpear(primary) and not primary:isBroken() then
+		return primary
+	end
+	return getAvailableSpear(player)
+end
+
+local function squareFromWorldObjects(worldobjects)
+	if not worldobjects then return nil end
+	for _, obj in ipairs(worldobjects) do
+		if obj and obj.getSquare then
+			local sq = obj:getSquare()
+			if sq then return sq end
+		end
+	end
+	return nil
+end
+
+local function onStakedSpear(worldobjects, square, playerNum)
+	local player = getSpecificPlayer(playerNum)
+	if not player or not square then return end
+	if not isSoftStakeGround(square) then return end
+
+	local spear = getSpearToStake(player)
+	if not spear then return end
+
+	if not luautils.walkAdj(player, square) then return end
+
+	if luautils.haveToBeTransfered(player, spear) then
+		ISTimedActionQueue.add(ISInventoryTransferAction:new(
+			player, spear, spear:getContainer(), player:getInventory(), 1))
+	end
+	if player:isHandItem(spear) then
+		ISTimedActionQueue.add(ISUnequipAction:new(player, spear, 1, "place"))
+	end
+	ISTimedActionQueue.add(ISStakedSpearAction:new(player, spear, square, getLocalOwnerId(player)))
+end
+
+local function fillStakedSpearMenu(playerNum, context, worldobjects, test)
+	if test and ISWorldObjectContextMenu and ISWorldObjectContextMenu.Test then return true end
+
+	local player = getSpecificPlayer(playerNum)
+	if not player then return end
+
+	local square = squareFromWorldObjects(worldobjects)
+	if not square then return end
+	if not isSoftStakeGround(square) then return end
+	if not getSpearToStake(player) then return end
+
+	if test then return true end
+	context:addOption(getText("UI_Spearbreaker_StakedSpear"), worldobjects, onStakedSpear, square, playerNum)
+end
+
+Events.OnFillWorldObjectContextMenu.Add(fillStakedSpearMenu)
+
+-- Square-entry edge: primary empty → instant take from world + two-hand equip.
+-- ISGrabItemAction stops on walk, so mid-stride contact cancels it; take directly instead.
+local lastStakeSquareKey = {}
+
+local function squareKey(sq)
+	if not sq then return nil end
+	return sq:getX() .. "," .. sq:getY() .. "," .. sq:getZ()
+end
+
+local function clearStakedFlags(item)
+	if not item then return end
+	local md = item:getModData()
+	if not md or not md.SpearbreakerStaked then return end
+	md.SpearbreakerStaked = nil
+	md.SpearbreakerOwner = nil
+end
+
+-- Clear after vanilla Grab / any path that puts a staked spear into inventory.
+local function clearStakedFlagsFromInventory(player)
+	if not player then return end
+	local marked = player:getInventory():getAllEvalRecurse(function(item)
+		local md = item:getModData()
+		return md and md.SpearbreakerStaked and not item:getWorldItem()
+	end)
+	if type(marked) == "userdata" then
+		for i = 0, marked:size() - 1 do
+			clearStakedFlags(marked:get(i))
+		end
+	elseif type(marked) == "table" then
+		for _, item in ipairs(marked) do
+			clearStakedFlags(item)
+		end
+	end
+end
+
+-- Vanilla ISGrabItemAction:transferItem SP path (time=0 feel, no stopOnWalk cancel).
+local function takeWorldItemToInventory(player, wo)
+	local item = wo and wo:getItem()
+	if not item then return nil end
+	local square = wo:getSquare()
+	if not square then return nil end
+	square:transmitRemoveItemFromSquare(wo)
+	wo:removeFromWorld()
+	wo:removeFromSquare()
+	wo:setSquare(nil)
+	item:setWorldItem(nil)
+	item:setJobDelta(0.0)
+	clearStakedFlags(item)
+	local inv = player:getInventory()
+	inv:setDrawDirty(true)
+	inv:AddItem(item)
+	ISInventoryPage.renderDirty = true
+	return item
+end
+
+local function findOwnedStakedSpearOnSquare(sq, ownerId)
+	local wos = sq and sq:getWorldObjects()
+	if not wos then return nil, nil end
+	for i = 0, wos:size() - 1 do
+		local wo = wos:get(i)
+		local item = wo and wo:getItem()
+		if item and isSpear(item) and not item:isBroken() then
+			local md = item:getModData()
+			if md and md.SpearbreakerStaked and tostring(md.SpearbreakerOwner or "") == ownerId then
+				return wo, item
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function pollStakedSpearContact(player)
+	if not player or player ~= getPlayer() or player:isDead() then return end
+
+	local sq = player:getCurrentSquare()
+	local playerNum = player:getPlayerNum()
+	local key = squareKey(sq)
+	local prev = lastStakeSquareKey[playerNum]
+	if not key then
+		lastStakeSquareKey[playerNum] = nil
+		return
+	end
+	-- Not an entry (same tile, or first frame on this character).
+	if prev == nil or prev == key then
+		lastStakeSquareKey[playerNum] = key
+		return
+	end
+
+	if player:getPrimaryHandItem() then
+		lastStakeSquareKey[playerNum] = key
+		return
+	end
+
+	local queue = ISTimedActionQueue.queues[player]
+	if queue and #queue.queue > 0 then
+		return
+	end
+
+	local ownerId = tostring(getLocalOwnerId(player) or "")
+	local wo, item = findOwnedStakedSpearOnSquare(sq, ownerId)
+	lastStakeSquareKey[playerNum] = key
+	if not wo or not item then return end
+
+	local taken = takeWorldItemToInventory(player, wo)
+	if not taken then return end
+	ISTimedActionQueue.add(ISEquipWeaponAction:new(player, taken, 1, true, true))
+end
+
+Events.OnPlayerUpdate.Add(pollStakedSpearContact)
+Events.OnContainerUpdate.Add(function()
+	clearStakedFlagsFromInventory(getPlayer())
+end)
