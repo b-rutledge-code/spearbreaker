@@ -502,6 +502,9 @@ local function takeWorldItemToInventory(player, wo)
 	if not item then return nil end
 	local square = wo:getSquare()
 	if not square then return nil end
+	-- Same foley as stake-in (reverse not available via scripted sounds).
+	player:getEmitter():playSound("DigFurrowWithTrowel")
+	addSound(player, player:getX(), player:getY(), player:getZ(), 10, 1)
 	square:transmitRemoveItemFromSquare(wo)
 	wo:removeFromWorld()
 	wo:removeFromSquare()
