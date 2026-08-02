@@ -1,6 +1,6 @@
 # Spearbreaker
 
-A Project Zomboid mod that streamlines spear combat by automatically swapping broken spears and quick-loading spears from inventory to your back.
+A Project Zomboid mod that streamlines spear combat by automatically swapping broken spears, quick-loading spares to your back, and (Build 42) staking spears in soft ground for a walk-on grab.
 
 **Repository:** [https://github.com/b-rutledge-code/spearbreaker](https://github.com/b-rutledge-code/spearbreaker)
 
@@ -10,6 +10,7 @@ Spears in Project Zomboid are powerful but fragile—they break often in combat.
 
 1. **Auto-swap on break**: When your equipped spear breaks during an attack, the mod automatically drops it and equips the spear from your back slot (if you have one).
 2. **Reload from inventory**: Press **R** while holding a spear to attach another spear from your inventory to your back slot—no inventory menu needed.
+3. **Stake Spear (Build 42)**: Right-click soft ground to plant a spear tip-down; walk onto **your** stake with empty hands to auto-equip two-handed.
 
 ## Requirements
 
@@ -54,6 +55,20 @@ The mod auto-selects the correct version for your game build.
 
 **Note**: Spears in bags still take transfer time (vanilla timed action) before attaching. If your spear **breaks** and your **back is empty**, press **R** right away to equip a spare from inventory into your hands (short window after the break; slower than back→hand auto-swap). Equipping anything else ends that window.
 
+### Stake Spear (Build 42)
+
+1. Right-click **soft ground** (dirt, sand, or clay — grass counts as dirt) with a spear available.
+2. Choose **Stake Spear**. Uses the spear in your hands first; otherwise a spare from inventory or bags (not the one on your back).
+3. The spear is planted tip-down on that tile.
+4. With **empty primary hands**, walk onto that square — your staked spear snaps into both hands.
+
+**Notes**
+
+- Requires vanilla **3D Ground Item** (default on) for the upright look.
+- Standing still after staking does not regrab; leave the square and re-enter.
+- On break, a spear on your back still takes priority over staked spears.
+- Multiplayer sync for owner-only auto-grab is not shipped yet (SP / local play is the supported path).
+
 ### Spearbreaker trait (optional, 6 points)
 
 With the **Spearbreaker** trait you get **+2 Spear XP**, **+1 Carving XP**, the **Fire Harden Spear** recipe from character creation, and **shorter delay between spear attacks** (melee cooldown drains faster when using a spear).
@@ -74,9 +89,10 @@ spearbreaker/
 │       │   ├── client/
 │       │   │   └── spearbreaker.lua
 │       │   ├── shared/TimedActions/
-│       │   │   └── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
+│       │   │   ├── ISAttachItemHotbarNoStopOnAim.lua   # B42 attach animation
+│       │   │   └── ISStakedSpearAction.lua             # Stake Spear place action
 │       │   └── shared/Translate/EN/
-│       │       └── UI.json   # Trait description
+│       │       └── UI.json   # Trait + Stake Spear strings
 │       └── scripts/spearbreaker/
 │           └── traits.txt     # Spearbreaker trait (6 pts: Spear+2, Carving+1, FireHardenSpear)
 ├── common/
@@ -91,6 +107,8 @@ spearbreaker/
 | **B42** `OnBreak.HandleHandler` | Wrapper | When spear breaks, drop `LongStick_Broken` to ground (never put in hand). Schedule delayed equip from back. |
 | **B42** `OnPlayerUpdate` | Poll | After 1.5 seconds post-break, equip spear from back slot (knockback must finish first); Spearbreaker trait: drain melee delay faster when holding spear |
 | `OnKeyPressed` | `reloadSpearFromInventory` | When R pressed, attach available spear from inventory to back slot |
+| **B42** `OnFillWorldObjectContextMenu` | Stake Spear menu | Soft ground + spear available → **Stake Spear** |
+| **B42** `OnPlayerUpdate` | Staked contact | Square-entry onto your staked spear with primary empty → instant take + two-hand equip |
 
 **B42 note**: The combat system runs a “broken swing” when the broken piece is in hand; equipping immediately fails because knockback interrupts timed actions. The mod drops the broken piece to the ground and waits 1.5 seconds before equipping from the back.
 
@@ -125,13 +143,14 @@ spearbreaker/
 | Name | Spearbreaker |
 | ID | SPEARBREAKER |
 | B41 Version | 41.78-1.0.0 (41.78.16–41.99) |
-| B42 Version | 1.3.0 (42.13+) |
+| B42 Version | 1.4.0 (42.13+) |
 | Client-only | Yes (no server Lua) |
 
 ## Known Limitations
 
 - Reload (R): bag spares use `transferIfNeeded` then attach (transfer time still applies). Post-break empty hands: R equips to hands for 5 s.
-- Single Lua file; no configurable keybind (R hardcoded).
+- Stake Spear: Build 42 only; MP owner sync deferred. Needs 3D Ground Item for upright pose.
+- No configurable keybind (R hardcoded).
 - No poster.png included (mod.info references it; optional).
 
 ## Reference Docs

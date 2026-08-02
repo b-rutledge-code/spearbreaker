@@ -63,9 +63,9 @@ function ISStakedSpearAction:complete()
 			wi:setIgnoreRemoveSandbox(true)
 			wi:setExtendedPlacement(true)
 		end
-		-- Dig only (DigFurrowWithShovel also plays a soil-pour tail).
-		self.character:playSound("DigFurrowWithTrowel")
-		addSound(self.character, self.character:getX(), self.character:getY(), self.character:getZ(), 10, 1)
+		-- Dig bite only (Shoveling's pour tail is cut in Spearbreaker_playStakeDigFoley).
+		Spearbreaker_playStakeDigFoley(self.character)
+		Spearbreaker_registerStakeSquare(self.square)
 	end
 
 	self.character:getInventory():Remove(self.item)

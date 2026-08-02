@@ -461,13 +461,72 @@ end
 
 Events.OnFillWorldObjectContextMenu.Add(fillStakedSpearMenu)
 
+-- Dig bite only: Shoveling is dig + soil-pour; cut before the pour tail.
+local STAKE_DIG_CUT_TICKS = 15
+
+function Spearbreaker_playStakeDigFoley(character, x, y, z)
+	if not character then return end
+	local sid = character:playSound("Shoveling")
+	addSound(character, x or character:getX(), y or character:getY(), z or character:getZ(), 3, 1)
+	if not sid or sid == 0 then return end
+	local ticks = 0
+	local function cutPourTail()
+		ticks = ticks + 1
+		if ticks < STAKE_DIG_CUT_TICKS then return end
+		Events.OnTick.Remove(cutPourTail)
+		local emitter = character:getEmitter()
+		if emitter and emitter:isPlaying(sid) then
+			emitter:stopOrTriggerSound(sid)
+		end
+	end
+	Events.OnTick.Add(cutPourTail)
+end
+
 -- Square-entry edge: primary empty → instant take from world + two-hand equip.
 -- ISGrabItemAction stops on walk, so mid-stride contact cancels it; take directly instead.
 local lastStakeSquareKey = {}
+-- Registered stake tiles for zombie knock-over (shared with ISStakedSpearAction via global).
+SpearbreakerStakedSquareKeys = SpearbreakerStakedSquareKeys or {}
+local lastZombieStakeSquareKey = {}
 
 local function squareKey(sq)
 	if not sq then return nil end
 	return sq:getX() .. "," .. sq:getY() .. "," .. sq:getZ()
+end
+
+local function parseSquareKey(key)
+	if not key then return nil, nil, nil end
+	local x, y, z = string.match(key, "^(%-?%d+),(%-?%d+),(%-?%d+)$")
+	if not x then return nil, nil, nil end
+	return tonumber(x), tonumber(y), tonumber(z)
+end
+
+local function squareHasStakedSpear(sq)
+	local wos = sq and sq:getWorldObjects()
+	if not wos then return false end
+	for i = 0, wos:size() - 1 do
+		local item = wos:get(i) and wos:get(i):getItem()
+		local md = item and item:getModData()
+		if md and md.SpearbreakerStaked then
+			return true
+		end
+	end
+	return false
+end
+
+function Spearbreaker_registerStakeSquare(sq)
+	local key = squareKey(sq)
+	if key then
+		SpearbreakerStakedSquareKeys[key] = true
+	end
+end
+
+local function unregisterStakeSquareIfEmpty(sq)
+	local key = squareKey(sq)
+	if not key then return end
+	if not squareHasStakedSpear(sq) then
+		SpearbreakerStakedSquareKeys[key] = nil
+	end
 end
 
 local function clearStakedFlags(item)
@@ -496,15 +555,58 @@ local function clearStakedFlagsFromInventory(player)
 	end
 end
 
+-- Flatten staked spear into a normal world item (zombie knock-over).
+-- wo is IsoWorldInventoryObject from square:getWorldObjects().
+local function knockDownStakedSpear(wo)
+	local item = wo and wo:getItem()
+	if not item then return false end
+	local md = item:getModData()
+	if not md or not md.SpearbreakerStaked then return false end
+
+	clearStakedFlags(item)
+	item:setWorldXRotation(0)
+	item:setWorldYRotation(0)
+	item:setWorldZRotation(0)
+	wo:setExtendedPlacement(false)
+	wo:setOffZ(0)
+	return true
+end
+
+local function knockDownAllStakedSpearsOnSquare(sq)
+	local wos = sq and sq:getWorldObjects()
+	if not wos then return end
+	local knocked = false
+	-- Snapshot indices; mutating while iterating is unsafe.
+	local toKnock = {}
+	for i = 0, wos:size() - 1 do
+		local wo = wos:get(i)
+		local item = wo and wo:getItem()
+		local md = item and item:getModData()
+		if md and md.SpearbreakerStaked then
+			table.insert(toKnock, wo)
+		end
+	end
+	for _, wo in ipairs(toKnock) do
+		if knockDownStakedSpear(wo) then
+			knocked = true
+		end
+	end
+	if knocked then
+		local player = getPlayer()
+		if player then
+			Spearbreaker_playStakeDigFoley(player, sq:getX(), sq:getY(), sq:getZ())
+		end
+		unregisterStakeSquareIfEmpty(sq)
+	end
+end
+
 -- Vanilla ISGrabItemAction:transferItem SP path (time=0 feel, no stopOnWalk cancel).
 local function takeWorldItemToInventory(player, wo)
 	local item = wo and wo:getItem()
 	if not item then return nil end
 	local square = wo:getSquare()
 	if not square then return nil end
-	-- Same foley as stake-in (reverse not available via scripted sounds).
-	player:getEmitter():playSound("DigFurrowWithTrowel")
-	addSound(player, player:getX(), player:getY(), player:getZ(), 10, 1)
+	Spearbreaker_playStakeDigFoley(player)
 	square:transmitRemoveItemFromSquare(wo)
 	wo:removeFromWorld()
 	wo:removeFromSquare()
@@ -512,6 +614,7 @@ local function takeWorldItemToInventory(player, wo)
 	item:setWorldItem(nil)
 	item:setJobDelta(0.0)
 	clearStakedFlags(item)
+	unregisterStakeSquareIfEmpty(square)
 	local inv = player:getInventory()
 	inv:setDrawDirty(true)
 	inv:AddItem(item)
@@ -569,10 +672,85 @@ local function pollStakedSpearContact(player)
 
 	local taken = takeWorldItemToInventory(player, wo)
 	if not taken then return end
-	ISTimedActionQueue.add(ISEquipWeaponAction:new(player, taken, 1, true, true))
+	-- Vanilla ISEquipWeaponAction cancels on run; stake grab must work mid-sprint.
+	local equip = ISEquipWeaponAction:new(player, taken, 1, true, true)
+	equip.stopOnRun = false
+	ISTimedActionQueue.add(equip)
 end
 
-Events.OnPlayerUpdate.Add(pollStakedSpearContact)
+-- Stake-square poll: zombie entry (or first sighting / stake-under-feet) knocks stakes flat.
+local function pollZombieKnockStakes()
+	local cell = getCell()
+	if not cell then return end
+
+	local seenZombies = {}
+	local keys = {}
+	for key, _ in pairs(SpearbreakerStakedSquareKeys) do
+		table.insert(keys, key)
+	end
+
+	for _, key in ipairs(keys) do
+		local x, y, z = parseSquareKey(key)
+		local sq = x and cell:getGridSquare(x, y, z) or nil
+		if not sq then
+			SpearbreakerStakedSquareKeys[key] = nil
+		elseif not squareHasStakedSpear(sq) then
+			-- Still marked on the item but missing from registry recovery path below.
+			SpearbreakerStakedSquareKeys[key] = nil
+		else
+			local movers = sq:getMovingObjects()
+			if movers then
+				for i = 0, movers:size() - 1 do
+					local obj = movers:get(i)
+					if instanceof(obj, "IsoZombie") and obj:isAlive() then
+						seenZombies[obj] = true
+						local prev = lastZombieStakeSquareKey[obj]
+						if prev ~= key then
+							lastZombieStakeSquareKey[obj] = key
+							knockDownAllStakedSpearsOnSquare(sq)
+							break
+						else
+							lastZombieStakeSquareKey[obj] = key
+						end
+					end
+				end
+			end
+		end
+	end
+
+	for zed, _ in pairs(lastZombieStakeSquareKey) do
+		if not seenZombies[zed] then
+			lastZombieStakeSquareKey[zed] = nil
+		end
+	end
+end
+
+-- If a stake exists on the player's square but registry missed it (load), re-register.
+local function recoverStakeRegistryNearPlayer(player)
+	if not player then return end
+	local sq = player:getCurrentSquare()
+	if not sq then return end
+	-- Scan player square + neighbors for orphaned staked spears.
+	local cell = getCell()
+	if not cell then return end
+	local px, py, pz = sq:getX(), sq:getY(), sq:getZ()
+	for dx = -1, 1 do
+		for dy = -1, 1 do
+			local nsq = cell:getGridSquare(px + dx, py + dy, pz)
+			if nsq and squareHasStakedSpear(nsq) then
+				Spearbreaker_registerStakeSquare(nsq)
+			end
+		end
+	end
+end
+
+local function pollStakedSpears(player)
+	pollStakedSpearContact(player)
+	recoverStakeRegistryNearPlayer(player)
+	pollZombieKnockStakes()
+end
+
+Events.OnPlayerUpdate.Add(pollStakedSpears)
 Events.OnContainerUpdate.Add(function()
 	clearStakedFlagsFromInventory(getPlayer())
 end)
