@@ -63,8 +63,7 @@ function ISStakedSpearAction:complete()
 			wi:setIgnoreRemoveSandbox(true)
 			wi:setExtendedPlacement(true)
 		end
-		-- Dig bite only (Shoveling's pour tail is cut in Spearbreaker_playStakeDigFoley).
-		Spearbreaker_playStakeDigFoley(self.character)
+		Spearbreaker_playStakeDigFoley(self.character, self.square)
 		Spearbreaker_registerStakeSquare(self.square)
 	end
 

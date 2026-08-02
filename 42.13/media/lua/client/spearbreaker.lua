@@ -461,23 +461,24 @@ end
 
 Events.OnFillWorldObjectContextMenu.Add(fillStakedSpearMenu)
 
--- Dig bite only: Shoveling is dig + soil-pour; cut before the pour tail.
-local STAKE_DIG_CUT_TICKS = 15
+-- Dirt foley for stake / pull / knock. DigFurrow* is silent as a one-shot.
+-- PlayWorldSound matches ISShovelAction; cut the Audio instance before the pour tail.
+-- StopSound(audio) only — not emitter stopOrTrigger (that muted later plays).
+local STAKE_DIG_CUT_TICKS = 28
 
-function Spearbreaker_playStakeDigFoley(character, x, y, z)
+function Spearbreaker_playStakeDigFoley(character, square)
 	if not character then return end
-	local sid = character:playSound("Shoveling")
-	addSound(character, x or character:getX(), y or character:getY(), z or character:getZ(), 3, 1)
-	if not sid or sid == 0 then return end
+	local sq = square or character:getCurrentSquare()
+	if not sq then return end
+	local audio = getSoundManager():PlayWorldSound("Shoveling", sq, 0, 5, 1, true)
+	addSound(character, character:getX(), character:getY(), character:getZ(), 3, 1)
+	if not audio then return end
 	local ticks = 0
 	local function cutPourTail()
 		ticks = ticks + 1
 		if ticks < STAKE_DIG_CUT_TICKS then return end
 		Events.OnTick.Remove(cutPourTail)
-		local emitter = character:getEmitter()
-		if emitter and emitter:isPlaying(sid) then
-			emitter:stopOrTriggerSound(sid)
-		end
+		getSoundManager():StopSound(audio)
 	end
 	Events.OnTick.Add(cutPourTail)
 end
@@ -594,7 +595,7 @@ local function knockDownAllStakedSpearsOnSquare(sq)
 	if knocked then
 		local player = getPlayer()
 		if player then
-			Spearbreaker_playStakeDigFoley(player, sq:getX(), sq:getY(), sq:getZ())
+			Spearbreaker_playStakeDigFoley(player, sq)
 		end
 		unregisterStakeSquareIfEmpty(sq)
 	end
