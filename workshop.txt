@@ -17,7 +17,6 @@ description=
 description=[b]Restock on the move[/b]
 description=• Press (R) while holding a spear to mount a spear on your back
 description=• Your character will use spears from inventory before going to spears in their bags
-
 description=
 description=[b]Stake the ground (Build 42)[/b]
 description=Spears are heavy and slow the character down. Stake reserves ahead of the fight
