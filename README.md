@@ -143,7 +143,7 @@ spearbreaker/
 | Name | Spearbreaker |
 | ID | SPEARBREAKER |
 | B41 Version | 41.78-1.0.0 (41.78.16–41.99) |
-| B42 Version | 1.4.0 (42.13+) |
+| B42 Version | 1.4.1 (42.13+) |
 | Client-only | Yes (no server Lua) |
 
 ## Known Limitations
