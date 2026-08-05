@@ -663,6 +663,7 @@ local function pollStakedSpearContact(player)
 
 	local queue = ISTimedActionQueue.queues[player]
 	if queue and #queue.queue > 0 then
+		lastStakeSquareKey[playerNum] = key
 		return
 	end
 
